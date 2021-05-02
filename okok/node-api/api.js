@@ -81,6 +81,7 @@ const createUser = async (request, response) => {
 };
 // end of endpoint to persist users
 
+//end point to create a bond between two users
 const createBond = async (request, response) => {
   const { bondKey, receiverEmail } = request.body;
   //secret key to decrypt the harsh
@@ -114,6 +115,7 @@ const createBond = async (request, response) => {
     }
   );
 };
+//end point to create a bond between two users
 
 //send Invite Button
 const sendInvite = async (request, response) => {
