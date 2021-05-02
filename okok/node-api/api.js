@@ -1,9 +1,10 @@
 // add your dependencies imports here
-const mysql = require('mysql');
-const express = require('express'); // requiring express in case needed in this file
-const nodemailer = require('nodemailer');
-require('dotenv').config() // for the .env 
-const Cryptr = require('cryptr');
+const mysql = require("mysql");
+const express = require("express"); // requiring express in case needed in this file
+const nodemailer = require("nodemailer");
+require("dotenv").config(); // for the .env
+const Cryptr = require("cryptr");
+const { v4: uuidv4 } = require("uuid");
 
 // do not add any dependency import below this line
 
@@ -14,67 +15,121 @@ const con = mysql.createConnection({
   password: process.env.DB_PASSWORD,
   database: process.env.DB_DATABASE,
   port: process.env.DB_PORT,
-
 });
 // end of database connection credentials
 
-
 // endpoint to get all users
 const getAllusers = async (request, response) => {
-    console.log("Return all bond users")
+  console.log("Return all bond users");
   con.query("SELECT * FROM person", function (err, result) {
-     // handling any errors
+    // handling any errors
     if (err) throw err;
-       response.status(200).json(result)  
-    });
+    response.status(200).json(result);
+  });
 };
 
 // endpoint to persist users
 const createUser = async (request, response) => {
-    const uid = request.body.uid;
-    const name = request.body.name;
-    const username =  request.body.username;
-    const photo = request.body.photo;
-    const email = request.body.email;
+  const uid = request.body.uid;
+  const name = request.body.name;
+  const username = request.body.username;
+  const photo = request.body.photo;
+  const email = request.body.email;
 
-    // pick the user from the database
-    con.query("SELECT * FROM person WHERE uid="+ mysql.escape(uid), function (err, result) {
-        // handling any errors
-        if (err) throw err;
-            // if query returned data then just login user
-            if(result[0]){
-                console.log("Normal user login => ");
-                response.status(200).json([{status: 'login', message: request.body.name+' Logged in successfully!'}]); 
-            }else{
-                // if user not in db persist data in the db
-                console.log("Persist user => ");
-                con.query("INSERT INTO person (uid, name, username, email, photo) VALUES ('"+uid+"','"+name+"','"+username+"','"+email+"','"+photo+"')", function (err, result) {
-                    response.status(200).json([{status: 'signup', message: request.body.name+' account created successfully!'}]); 
- 
-                });
-            }
-        });
+  // pick the user from the database
+  con.query(
+    "SELECT * FROM person WHERE uid=" + mysql.escape(uid),
+    function (err, result) {
+      // handling any errors
+      if (err) throw err;
+      // if query returned data then just login user
+      if (result[0]) {
+        console.log("Normal user login => ");
+        response.status(200).json([
+          {
+            status: "login",
+            message: request.body.name + " Logged in successfully!",
+          },
+        ]);
+      } else {
+        // if user not in db persist data in the db
+        console.log("Persist user => ");
+        con.query(
+          "INSERT INTO person (uid, name, username, email, photo) VALUES ('" +
+            uid +
+            "','" +
+            name +
+            "','" +
+            username +
+            "','" +
+            email +
+            "','" +
+            photo +
+            "')",
+          function (err, result) {
+            response.status(200).json([
+              {
+                status: "signup",
+                message: request.body.name + " account created successfully!",
+              },
+            ]);
+          }
+        );
+      }
+    }
+  );
 };
 // end of endpoint to persist users
 
-
+const createBond = async (request, response) => {
+  const { bondKey, receiverEmail } = request.body;
+  //secret key to decrypt the harsh
+  const cryptr = new Cryptr("bondkey");
+  const senderKey = cryptr.decrypt(bondKey);
+  const bondID = uuidv4();
+  const roomName = "";
+  con.query(
+    "INSERT INTO room (id, roomname) VALUES('" +
+      bondID +
+      "','" +
+      roomName +
+      "')",
+    function (err) {
+      if (err) {
+        response.status(500).json([
+          {
+            status: "failed",
+            message: "Failed to bond with ",
+            senderKey,
+          },
+        ]);
+      }
+      response.status(201).json([
+        {
+          status: "bonded",
+          message: "You are now bonded with ",
+          senderKey,
+        },
+      ]);
+    }
+  );
+};
 
 //send Invite Button
 const sendInvite = async (request, response) => {
-
   var returnVal = {
-                    message: "Error Posting request",
-                    status: 1
-                  }
+    message: "Error Posting request",
+    status: 1,
+  };
 
   var sender = request.body.senderEmail;
   var receiver = request.body.receiverEmail;
-                  
-        // function that holds the formatted html invite
-        // sender is the object of the person sending the invite. gotten from the db
-        formattedHTMLInvite = (sender, senderEncryptedEmail) =>{
-        
-          let templete = `
+
+  // function that holds the formatted html invite
+  // sender is the object of the person sending the invite. gotten from the db
+  formattedHTMLInvite = (sender, senderEncryptedEmail) => {
+    let templete =
+      `
           <!doctype html>
           <html lang="en" xmlns="http://www.w3.org/1999/xhtml" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
             <head>
@@ -155,14 +210,22 @@ const sendInvite = async (request, response) => {
                                                   <div style='color:#777777;font-family:Oxygen, Helvetica neue, sans-serif;font-size:14px;line-height:21px;text-align:center;'>
                                                     <center>
                                                       <span class="circular-img">
-                                                        <img src="`+sender.photo+`"/>
+                                                        <img src="` +
+      sender.photo +
+      `"/>
                                                         </span><br/>
-                                                      <span>`+sender.name+`</span><br/>
-                                                      <span>`+sender.email+`</span>
+                                                      <span>` +
+      sender.name +
+      `</span><br/>
+                                                      <span>` +
+      sender.email +
+      `</span>
                                                     </center>
                                                     <br/>
                                                   <span>
-                                                    Hey, <b>`+sender.name+`</b> would like to bond with you. Please click the button below to bond now.
+                                                    Hey, <b>` +
+      sender.name +
+      `</b> would like to bond with you. Please click the button below to bond now.
                                                       <br />
                                                       <br />
                                                     </span>
@@ -189,7 +252,9 @@ const sendInvite = async (request, response) => {
                                                   <table border='0' cellpadding='0' cellspacing='0' role='presentation' style='border-collapse:separate;line-height:100%;'>
                                                     <tr>
                                                         <td align='center' bgcolor='#ff6f6f' role='presentation' style='background-color:#ff6f6f;border:none;border-radius:5px;cursor:auto;padding:10px 25px;' valign='middle'>
-                                                          <a href='http://bond-nu.vercel.app/accept?bondkey=`+senderEncryptedEmail+`' style='background:#ff6f6f;color:#ffffff;font-family:Oxygen, Helvetica neue, sans-serif;font-size:14px;font-weight:400;line-height:21px;margin:0;text-decoration:none;text-transform:none;' target='_blank'>
+                                                          <a href='http://bond-nu.vercel.app/accept?bondkey=` +
+      senderEncryptedEmail +
+      `' style='background:#ff6f6f;color:#ffffff;font-family:Oxygen, Helvetica neue, sans-serif;font-size:14px;font-weight:400;line-height:21px;margin:0;text-decoration:none;text-transform:none;' target='_blank'>
                                                           Bond now!
                                                           </a>
                                                         </td>
@@ -218,77 +283,78 @@ const sendInvite = async (request, response) => {
               </div>
             </body>
           </html>
-          `
-        
-          return templete
-        }
-        // end of function that holds the formatted html invite
-  
+          `;
 
+    return templete;
+  };
+  // end of function that holds the formatted html invite
 
   //guard clause incase of null parameters
-  if(sender == undefined || receiver == undefined) response.status(500).json(returnVal);
+  if (sender == undefined || receiver == undefined)
+    response.status(500).json(returnVal);
 
-  con.query("SELECT uid FROM person WHERE email='"+receiver+"' LIMIT 1", async (err,receiverRes) => {
-     
-    // check if receiver is not already a user
-    if(receiverRes.length == 0){
+  con.query(
+    "SELECT uid FROM person WHERE email='" + receiver + "' LIMIT 1",
+    async (err, receiverRes) => {
+      // check if receiver is not already a user
+      if (receiverRes.length == 0) {
+        con.query(
+          "SELECT * FROM person WHERE email='" + sender + "' LIMIT 1",
+          async (err, senderRes) => {
+            //check if somehow sender email is invalid
+            if (senderRes.length == 0) {
+              returnVal.status = 2;
+              returnVal.message = "sender email is invalid";
+              response.status(500).json(returnVal);
+            }
 
-      con.query("SELECT * FROM person WHERE email='"+sender+"' LIMIT 1", async (err,senderRes) => {  
-        //check if somehow sender email is invalid
-        if(senderRes.length == 0) {  
-            returnVal.status = 2;
-            returnVal.message = "sender email is invalid"
-            response.status(500).json(returnVal);
-        }
+            // encripting the sender's email to use in the invite
+            const cryptr = new Cryptr("bondkey");
+            const senderEncryptedEmail = cryptr.encrypt(sender);
 
+            // create reusable transporter object using the default SMTP transport
+            var transporter = nodemailer.createTransport({
+              service: "Gmail",
+              auth: {
+                user: process.env.GMAIL_USER,
+                pass: process.env.GMAIL_PASSWORD,
+              },
+            });
 
-      // encripting the sender's email to use in the invite
-      const cryptr = new Cryptr('bondkey');
-      const senderEncryptedEmail = cryptr.encrypt(sender);
-
-      // create reusable transporter object using the default SMTP transport
-      var transporter = nodemailer.createTransport({
-        service: 'Gmail',
-        auth: {
-            user: process.env.GMAIL_USER,
-            pass: process.env.GMAIL_PASSWORD
-        }
-        });
-
-      // send mail with defined transport object
-      let info = await transporter.sendMail({
-        from: '"Bond" <foo@example.com>', // sender address
-        to: receiver, // list of receivers
-        subject: "Bond request from "+senderRes[0].name, // Subject line
-        text: 'Hi there',
-        html: formattedHTMLInvite(senderRes[0], senderEncryptedEmail)
-      
-      });
-      // decripting to make sure everything is okay!
-      const senderDecryptedEmail = cryptr.decrypt(senderEncryptedEmail);
-      console.log("decrypted email =>"+senderDecryptedEmail)
-      console.log("Message sent: %s", info.messageId);
-      // Message sent: <b658f8ca-6296-ccf4-8306-87d57a0b4321@example.com>
-      response.status(200).json({status: 'sent', message: 'Bond invite sent successfully to '+receiver}); 
-
-    })
-
-  }else{
-    //if reciever is already a user
-    response.status(200).json("This is not an error: if receiver is already a user module")
-
-  }
-  
-})
-
-}
+            // send mail with defined transport object
+            let info = await transporter.sendMail({
+              from: '"Bond" <foo@example.com>', // sender address
+              to: receiver, // list of receivers
+              subject: "Bond request from " + senderRes[0].name, // Subject line
+              text: "Hi there",
+              html: formattedHTMLInvite(senderRes[0], senderEncryptedEmail),
+            });
+            // decripting to make sure everything is okay!
+            const senderDecryptedEmail = cryptr.decrypt(senderEncryptedEmail);
+            console.log("decrypted email =>" + senderDecryptedEmail);
+            console.log("Message sent: %s", info.messageId);
+            // Message sent: <b658f8ca-6296-ccf4-8306-87d57a0b4321@example.com>
+            response.status(200).json({
+              status: "sent",
+              message: "Bond invite sent successfully to " + receiver,
+            });
+          }
+        );
+      } else {
+        //if reciever is already a user
+        response
+          .status(200)
+          .json("This is not an error: if receiver is already a user module");
+      }
+    }
+  );
+};
 
 //end of send Invite Button
 
-
 module.exports = {
-    getAllusers,
-    createUser,
-    sendInvite
+  getAllusers,
+  createUser,
+  sendInvite,
+  createBond,
 };
